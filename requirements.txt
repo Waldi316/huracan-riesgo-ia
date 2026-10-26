@@ -1,0 +1,12 @@
+numpy>=1.26
+pandas>=2.2
+geopandas>=1.0
+pyogrio>=0.9
+requests>=2.32
+lightgbm>=4.5
+scikit-learn>=1.5
+joblib>=1.4
+folium>=0.17
+anthropic>=2.3
+streamlit>=1.40
+pytest>=8.0
