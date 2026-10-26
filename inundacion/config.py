@@ -1,0 +1,64 @@
+"""Parámetros del módulo de inundación. Todo lo ajustable vive aquí."""
+from huracan_ia.config import CARPETA_DATOS, CARPETA_SALIDAS
+
+CARPETA_DATOS_INUNDACION = CARPETA_DATOS / "inundacion"
+CARPETA_SALIDAS_INUNDACION = CARPETA_SALIDAS / "inundacion"
+
+# --- Fuentes públicas ---
+# Copernicus DEM GLO-30 (30 m), servido como COG en AWS Open Data.
+URL_DEM_COPERNICUS = (
+    "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_{ns}{lat:02d}_00_{ew}{lon:03d}_00_DEM/"
+    "Copernicus_DSM_COG_10_{ns}{lat:02d}_00_{ew}{lon:03d}_00_DEM.tif"
+)
+# ESA WorldCover 2021 (10 m), cobertura de suelo para el número de curva.
+URL_WORLDCOVER = (
+    "https://esa-worldcover.s3.eu-central-1.amazonaws.com/v200/2021/map/"
+    "ESA_WorldCover_10m_2021_v200_{ns}{lat:02d}{ew}{lon:03d}_Map.tif"
+)
+# CMORPH CDR (NOAA/NCEI): lluvia estimada por satélite, horaria a 0.25°, desde 1998.
+URL_CMORPH_HORARIO = (
+    "https://www.ncei.noaa.gov/data/cmorph-high-resolution-global-precipitation-estimates/access/hourly/0.25deg/"
+    "{t:%Y/%m/%d}/CMORPH_V1.0_ADJ_0.25deg-HLY_{t:%Y%m%d%H}.nc"
+)
+# Elevación gruesa (teselas Terrarium/Mapzen en AWS) para el efecto orográfico en el modelo de lluvia.
+URL_ELEVACION_TESELA = "https://s3.amazonaws.com/elevation-tiles-prod/geotiff/{z}/{x}/{y}.tif"
+NIVEL_TESELA_ELEVACION = 5
+
+# --- Zona piloto ---
+DOMINIOS = {
+    # Acapulco: bahía, río La Sabana y llanuras de Llano Largo / Diamante.
+    "acapulco": {"lat_min": 16.74, "lat_max": 17.06, "lon_min": -99.99, "lon_max": -99.70},
+}
+
+# --- Modelo de lluvia ---
+# Caja en la que se toman tormentas y celdas de CMORPH para entrenar.
+CAJA_LLUVIA = {"lat_min": 10.0, "lat_max": 33.0, "lon_min": -118.0, "lon_max": -82.0}
+ANIO_MINIMO_LLUVIA = 2004
+RADIO_MAXIMO_LLUVIA_KM = 600
+CELDAS_POR_HORA = 400          # celdas muestreadas al azar por cada hora de tormenta
+VIENTO_MINIMO_KT = 25
+ANIO_PRUEBA_LLUVIA = 2021      # se entrena con temporadas anteriores y se evalúa con las siguientes
+
+# --- Hidrología ---
+UMBRAL_CAUCE_KM2 = 0.5         # área drenada a partir de la cual una celda es cauce
+N_MANNING = 0.06               # rugosidad de planicie (urbano / vegetación)
+PENDIENTE_MINIMA = 0.001
+NIVELES_TIRANTE_M = (0.0, 20.0, 0.1)   # tabla de curva de gasto: de 0 a 20 m cada 10 cm
+TIRANTE_MINIMO_VISIBLE_M = 0.15
+# Número de curva (condición de humedad II) por clase de WorldCover.
+NUMERO_CURVA = {
+    10: 70,   # árboles
+    20: 77,   # matorral
+    30: 79,   # pastizal
+    40: 81,   # cultivo
+    50: 92,   # urbano
+    60: 86,   # suelo desnudo
+    70: 98,   # nieve
+    80: 100,  # agua
+    90: 90,   # humedal
+    95: 90,   # manglar
+    100: 79,  # musgo
+}
+NUMERO_CURVA_DEFECTO = 80
+# Con huracanes el suelo suele llegar mojado: se usa la condición III.
+HUMEDAD_ANTECEDENTE_III = True

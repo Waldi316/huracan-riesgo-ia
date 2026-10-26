@@ -84,7 +84,79 @@ Las variables con más peso (ganancia) son la distancia actual al centro, la vel
 - **Persistencia vs. pronóstico oficial.** Para entrenar se usa un pronóstico por persistencia (extrapolar las últimas 12 h), porque es lo que se puede reconstruir para cualquier momento histórico. En operación se usa el pronóstico del NHC, que es mejor, así que el modelo probablemente sobrestima la incertidumbre. La siguiente fase es entrenar con el archivo de pronósticos oficiales del NHC.
 - **Radio de 34 kt en operación.** El shapefile de puntos del NHC no trae radios de viento; si no se pasa `--r34-km`, se usa la mediana histórica.
 - **Viento, no daño.** La etiqueta es haber recibido vientos de 34 kt, no daño ni cierre. Con registros reales de afectaciones se puede entrenar una versión con esa etiqueta.
-- **Lluvia y marea de tormenta** no están modeladas.
+- **Marea de tormenta** no está modelada. La lluvia se trata en el módulo `inundacion` (abajo).
+
+## Zonas inundables por lluvia de huracanes (`inundacion/`)
+
+Segundo módulo: **qué zonas se inundan, cuándo y con cuánta agua**, a partir de la lluvia que se espera de una tormenta. Piloto: Acapulco con el huracán John (septiembre de 2024), que dejó casi 1,000 mm en algunas estaciones y la peor inundación reciente del puerto.
+
+```mermaid
+flowchart LR
+    A[IBTrACS + CMORPH<br/>lluvia satelital 2004-2026] --> B[Modelo de lluvia<br/>LightGBM esperado y P90]
+    N[Aviso del NHC<br/>trayectoria pronosticada] --> B
+    B --> C[Lluvia horaria<br/>sobre la ciudad]
+    D[DEM Copernicus 30 m] --> E[Drenaje y HAND<br/>altura sobre el cauce]
+    W[ESA WorldCover] --> F
+    C --> F[Escurrimiento<br/>número de curva]
+    E --> G[Curva de gasto<br/>por tramo]
+    F --> H[Caudal por tramo<br/>hidrograma unitario]
+    G --> I[Tirante hora por hora]
+    H --> I
+    I --> J[Animación web · NetCDF con tiempo<br/>GeoTIFF · inmuebles afectados]
+```
+
+**1. Modelo de lluvia (la parte de IA).** Responde: dada la posición, intensidad y movimiento de la tormenta, ¿cuántos mm/h van a caer en un punto? Se entrena con 2 millones de celdas-hora de lluvia satelital CMORPH alrededor de 367 tormentas que pasaron cerca de México (2004-2020) y se evalúa con 2021 en adelante. Las variables incluyen distancia, lado y frente de la tormenta, viento, intensificación, velocidad, relieve y cuánto llovía en la tormenta **cuando se emitió el pronóstico**, con el plazo como variable, así que funciona igual con un aviso real del NHC. La referencia es R-CLIPER, el modelo climatológico de lluvia que usa el NHC.
+
+**2. Hidrología sobre el terreno.** Esquema HAND + curva de gasto sintética, como el de la NOAA (OWP): el escurrimiento por número de curva según la cobertura de suelo se convierte en caudal por tramo de cauce con un hidrograma unitario. Una curva de gasto construida con el propio terreno da el tirante, y se inunda toda celda cuya altura sobre el cauce quede por debajo.
+
+### Resultados
+
+Lluvia acumulada por evento en celdas de tierra a menos de 300 km de la trayectoria (70 tormentas de prueba, 2021+, pronóstico emitido 24 h antes):
+
+| | Correlación | RMSE (mm) | Sesgo en celdas con ≥100 mm |
+|---|---|---|---|
+| R-CLIPER (NHC) | 0.54 | 54.5 | −102 mm |
+| **LightGBM esperado** | **0.64** | **53.1** | −108 mm |
+| **LightGBM severo (P90)** | 0.67 | 76.5 | **+17 mm** |
+
+El modelo esperado explica mejor dónde llueve, pero, como R-CLIPER, se queda corto en la lluvia extrema. El escenario severo (cuantil 90, cobertura real de 89% por hora) corrige casi todo ese sesgo y es el que conviene usar para alertar.
+
+John 2024 en Acapulco (`python -m inundacion simular ...`, 250 inmuebles **simulados**):
+
+| Escenario | Lluvia total | Área inundada máx. | Inmuebles con ≥0.15 m |
+|---|---|---|---|
+| Lluvia observada (CMORPH) | 686 mm | 43.8 km² | 15 |
+| Aviso NHC 23 sep 12:00 (esperado / severo) | 54 / 177 mm | 7.6 / 17.3 km² | 0 / 5 |
+| Aviso NHC 25 sep 09:00 (esperado / severo) | 170 / 365 mm | 18.1 / 26.8 km² | 5 / 7 |
+| Trayectoria real + modelo | 207 mm | 28.0 km² | 7 |
+
+Con la lluvia observada, las zonas inundadas son el río La Sabana y la planicie de Llano Largo y Diamante, con el pico el 26 de septiembre, lo que coincide con lo reportado. Con los avisos que había en su momento, ningún escenario anticipa la magnitud: el NHC pronosticaba la trayectoria de John lejos de Acapulco y no previó su regeneración frente a Guerrero, y la lluvia en el puerto cayó con el centro a 200-300 km. Para este evento, el error de trayectoria pesó más que el modelo de lluvia.
+
+### Uso
+
+```bash
+python -m inundacion terreno --dominio acapulco          # DEM, cobertura, drenaje y HAND
+python -m inundacion entrenar-lluvia                     # ~6,000 horas de CMORPH (~1.2 GB), LightGBM vs R-CLIPER
+python -m inundacion simular --tormenta JOHN --temporada 2024 \
+    --inicio "2024-09-22 18:00" --fin "2024-09-29 12:00" \
+    --nhc datos/inundacion/nhc/ep102024_5day_005.zip --nhc datos/inundacion/nhc/ep102024_5day_011.zip \
+    --emision-real "2024-09-23 18:00"
+```
+
+Los avisos se descargan de `https://www.nhc.noaa.gov/gis/forecast/archive/` (`ep102024_5day_NNN.zip`). Salidas en `salidas/inundacion/<tormenta>_<dominio>/`:
+
+- `animacion.html`: mapa animado con barra de tiempo, hietograma, área inundada y los inmuebles cambiando de color hora por hora.
+- `escenarioN_tirante_horario.nc`: tirante por hora (NetCDF CF con tiempo). Se abre en ArcGIS Pro o QGIS como ráster multidimensional, listo para el Time Slider.
+- `escenarioN_tirante_max.tif` y `escenarioN_inmuebles.gpkg` / `.csv`, con el tirante máximo y la hora en que se inunda cada inmueble.
+- `arcgis/InundacionHuracan.pyt`: caja de herramientas de ArcGIS Pro que carga un escenario con su simbología.
+
+### Limitaciones
+
+- **Modelo de primer orden.** HAND + curva de gasto no simula flujo 2D, remanso ni drenaje urbano. Tampoco incluye la marea de tormenta, que en Acapulco se suma en la costa.
+- **DEM de superficie.** Copernicus incluye edificios y árboles; en zona urbana un DEM de terreno desnudo (LiDAR de INEGI, FABDEM) daría mejores tirantes.
+- **Lluvia uniforme** sobre el dominio, tomada en su centro (las celdas de CMORPH son de ~27 km).
+- **Sin validación contra manchas observadas.** No hubo acceso a polígonos de inundación (CENAPRED, Sentinel-1). Con ellos se puede calibrar el número de curva y la rugosidad, y entrenar un clasificador de celdas inundadas.
+- **Lluvia extrema.** El modelo esperado subestima eventos como John. Para alertar conviene usar el escenario P90.
 
 ## Estructura
 
@@ -101,8 +173,18 @@ huracan_ia/
   boletin.py      boletín ejecutivo con Claude
   mapa.py         mapa Folium
   ubicaciones.py  cartera simulada o desde CSV/DENUE
+inundacion/
+  terreno.py      DEM Copernicus, cobertura WorldCover, drenaje y HAND (pysheds)
+  lluvia.py       CMORPH horario y elevación gruesa
+  modelo_lluvia.py  LightGBM (esperado y P90) vs R-CLIPER, evaluación por evento
+  escenarios.py   lluvia observada, por trayectoria y por aviso del NHC
+  hidrologia.py   escurrimiento, caudal, curva de gasto y tirante por hora
+  exposicion.py   inmuebles simulados y su tirante hora por hora
+  exportar.py     NetCDF con tiempo, GeoTIFF y GeoPackage
+  animacion.py    mapa animado (Leaflet)
+arcgis/InundacionHuracan.pyt  carga de escenarios en ArcGIS Pro
 app/streamlit_app.py
-tests/            pruebas con tormentas sintéticas (pytest)
+tests/            pruebas con tormentas y terrenos sintéticos (pytest)
 ```
 
 ## Fuentes
@@ -111,3 +193,7 @@ tests/            pruebas con tormentas sintéticas (pytest)
 - [NHC GIS](https://www.nhc.noaa.gov/gis/) y [CurrentStorms.json](https://www.nhc.noaa.gov/CurrentStorms.json), NOAA.
 - [Cono de pronóstico del NHC](https://www.nhc.noaa.gov/aboutcone.shtml).
 - [DENUE](https://www.inegi.org.mx/app/mapa/denue/), INEGI (opcional).
+- [Copernicus DEM GLO-30](https://registry.opendata.aws/copernicus-dem/), ESA, en AWS Open Data.
+- [ESA WorldCover 2021](https://esa-worldcover.org/), 10 m.
+- [CMORPH CDR](https://www.ncei.noaa.gov/products/climate-data-records/precipitation-cmorph), NOAA/NCEI.
+- R-CLIPER: Tuleya et al. (2007), *Weather and Forecasting* 22, 56-70. HAND: Nobre et al. (2011); curva de gasto sintética: Zheng et al. (2018), NOAA OWP.
