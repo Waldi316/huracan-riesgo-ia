@@ -44,6 +44,13 @@ TABLA_DIST_PRONOSTICO_KM = [(76, 1.0), (176, 0.8), (276, 0.6), (376, 0.4)]
 TABLA_DIST_OBSERVADO_KM = [(139, 1.0), (289, 0.8), (398, 0.6), (468, 0.4)]
 
 # --- Niveles de alerta a partir de la probabilidad del modelo ---
+# Los umbrales se calibran al entrenar: el nivel Medio debe detectar esta
+# fracción de las ubicaciones que reciben 34 kt en temporadas de validación,
+# y el nivel Alto esta otra (más estricta, con menos falsas alarmas).
+COBERTURA_OBJETIVO_MEDIO = 0.80
+COBERTURA_OBJETIVO_ALTO = 0.50
+TEMPORADAS_VALIDACION = 4  # las últimas temporadas antes de la prueba
+# Respaldo si el modelo guardado no trae umbrales calibrados.
 UMBRAL_PROB_ALTO = 0.6
 UMBRAL_PROB_MEDIO = 0.3
 
