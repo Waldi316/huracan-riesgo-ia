@@ -56,6 +56,11 @@ def evaluar(modelo, prueba, objetivo=OBJETIVO):
             "cobertura": float(recall_score(y, alerta, zero_division=0)),
         }
 
+    # Comparación justa: el umbral del modelo que alcanza la misma cobertura que el índice base.
+    cobertura_base = recall_score(y, alerta_base, zero_division=0)
+    umbral_igual = float(np.quantile(prob[y == 1], 1 - cobertura_base)) if y.sum() else 1.0
+    alerta_igual = prob >= umbral_igual
+
     return {
         "filas_prueba": int(len(y)),
         "positivos_prueba": int(y.sum()),
@@ -65,6 +70,10 @@ def evaluar(modelo, prueba, objetivo=OBJETIVO):
             "pr_auc": float(average_precision_score(y, prob)),
             "brier": float(brier_score_loss(y, prob)),
             **resumen_alerta(alerta_modelo),
+        },
+        "modelo_misma_cobertura_que_base": {
+            "umbral_prob": umbral_igual,
+            **resumen_alerta(alerta_igual),
         },
         "indice_base": {
             "roc_auc": float(roc_auc_score(y, ifa)),

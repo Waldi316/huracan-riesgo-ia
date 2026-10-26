@@ -57,15 +57,25 @@ Salidas en `salidas/`: `modelo.joblib`, `metricas.json` y, por cada emisión, `*
 
 ## Resultados
 
-_Pendiente: se llenan al correr `python -m huracan_ia entrenar` con IBTrACS completo._
+Corrida del 26 de octubre de 2026 con `python -m huracan_ia entrenar`: IBTrACS v04r01 (Atlántico Norte y Pacífico Oriental, 2004 en adelante), 535 tormentas que pasaron cerca de México y la cartera simulada de 400 ubicaciones. Entrenamiento con temporadas 2004–2019 (777,440 filas) y prueba con 2020 en adelante (379,535 filas de 153 tormentas, 9,092 positivos, 2.4 %). Las cifras salen de `salidas/metricas.json`.
 
 | Método | ROC AUC | PR AUC | Alertas emitidas | Precisión | Cobertura |
 | --- | --- | --- | --- | --- | --- |
-| Índice de pesos fijos | | | | | |
-| Modelo LightGBM | | | | | |
+| Índice de pesos fijos (nivel Medio o Alto) | 0.824 | 0.230 | 82,877 | 8.4 % | 76.8 % |
+| Modelo LightGBM, umbral 0.30 | 0.919 | 0.365 | 8,250 | 41.0 % | 37.2 % |
+| Modelo LightGBM, umbral con la misma cobertura que el índice (0.014) | 0.919 | 0.365 | 51,923 | 13.4 % | 76.8 % |
+
+Brier del modelo: 0.0195.
+
+**Lectura.** El modelo ordena mejor las ubicaciones que el índice fijo (ROC AUC 0.92 contra 0.82, PR AUC 0.37 contra 0.23). Con la misma cobertura que el índice, emite 37 % menos alertas y su precisión sube de 8 % a 13 %. Con el umbral por defecto de 0.30 es mucho más conservador: acierta 4 de cada 10 alertas, pero solo detecta 37 % de las ubicaciones afectadas, así que **ese umbral no sirve para alertamiento** tal como está; hay que elegirlo según cuántas falsas alarmas se toleran.
+
+Las variables con más peso (ganancia) son la distancia actual al centro, la velocidad de traslación, el margen respecto al cono y la distancia mínima al pronóstico.
+
+**Backtest de Otis 2023** (`simular --tormenta OTIS --temporada 2023 --emision "2023-10-24 00:00"`, unas 30 horas antes de tocar tierra en Acapulco, cuando aún era tormenta tropical): de las 400 ubicaciones, 26 recibieron 34 kt o más en las 72 h siguientes. El índice fijo alertó 201 y atrapó las 26. El modelo, con el umbral 0.30, no alertó ninguna: su probabilidad más alta fue 0.29 (Acapulco). Sin embargo, el orden fue perfecto: las 26 afectadas tuvieron probabilidad de 0.084 o más y ninguna de las no afectadas pasó de 0.066. Con el umbral de igual cobertura (0.014) el modelo habría alertado 93 ubicaciones con las 26 afectadas incluidas. Otis se intensificó de forma explosiva, algo que un pronóstico por persistencia no puede anticipar.
 
 ## Limitaciones
 
+- **Umbrales sin calibrar.** Los cortes 0.30 y 0.60 se fijaron antes de entrenar. Los resultados muestran que el modelo da probabilidades bajas en emisiones lejanas, así que el siguiente paso es elegir el umbral con un objetivo explícito de cobertura en temporadas de validación.
 - **Persistencia vs. pronóstico oficial.** Para entrenar se usa un pronóstico por persistencia (extrapolar las últimas 12 h), porque es lo que se puede reconstruir para cualquier momento histórico. En operación se usa el pronóstico del NHC, que es mejor, así que el modelo probablemente sobrestima la incertidumbre. La siguiente fase es entrenar con el archivo de pronósticos oficiales del NHC.
 - **Radio de 34 kt en operación.** El shapefile de puntos del NHC no trae radios de viento; si no se pasa `--r34-km`, se usa la mediana histórica.
 - **Viento, no daño.** La etiqueta es haber recibido vientos de 34 kt, no daño ni cierre. Con registros reales de afectaciones se puede entrenar una versión con esa etiqueta.
