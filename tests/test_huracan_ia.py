@@ -108,6 +108,14 @@ def test_pipeline_completo_con_tormentas_sinteticas():
     assert set(modelo.nivel([0.1, 0.4, 0.9])) == {"Bajo", "Medio", "Alto"}
 
 
+def test_umbral_para_cobertura():
+    y = np.array([0, 0, 1, 1, 1, 1])
+    prob = np.array([0.05, 0.5, 0.1, 0.2, 0.3, 0.4])
+    u = modelo.umbral_para_cobertura(prob, y, 0.75)
+    assert ((prob >= u) & (y == 1)).sum() / y.sum() >= 0.75
+    assert modelo.nivel([0.15, 0.25, 0.5], {"medio": 0.2, "alto": 0.4}).tolist() == ["Bajo", "Medio", "Alto"]
+
+
 def test_cartera_simulada_es_reproducible():
     a, b = ubicaciones.simuladas(50, semilla=1), ubicaciones.simuladas(50, semilla=1)
     pd.testing.assert_frame_equal(a, b)

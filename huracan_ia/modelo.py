@@ -39,15 +39,39 @@ def predecir(modelo, variables):
     return modelo.predict_proba(variables[COLUMNAS_MODELO])[:, 1]
 
 
-def evaluar(modelo, prueba, objetivo=OBJETIVO):
+def umbral_para_cobertura(prob, y, cobertura):
+    """Probabilidad mínima con la que se detecta esa fracción de los positivos."""
+    prob, y = np.asarray(prob), np.asarray(y)
+    if not y.sum():
+        return 1.0
+    return float(np.quantile(prob[y == 1], 1 - cobertura))
+
+
+def calibrar_umbrales(modelo, validacion, objetivo=OBJETIVO,
+                      cobertura_medio=config.COBERTURA_OBJETIVO_MEDIO, cobertura_alto=config.COBERTURA_OBJETIVO_ALTO):
+    """Umbrales de los niveles Medio y Alto elegidos por cobertura en temporadas de validación."""
+    y = validacion[objetivo].to_numpy()
+    prob = predecir(modelo, validacion)
+    return {
+        "medio": umbral_para_cobertura(prob, y, cobertura_medio),
+        "alto": umbral_para_cobertura(prob, y, cobertura_alto),
+        "cobertura_objetivo_medio": cobertura_medio,
+        "cobertura_objetivo_alto": cobertura_alto,
+        "temporadas_validacion": sorted(int(t) for t in validacion["temporada"].unique()),
+    }
+
+
+def evaluar(modelo, prueba, objetivo=OBJETIVO, umbrales=None):
     """Compara el modelo contra el índice de pesos fijos en el mismo conjunto de prueba."""
+    umbrales = umbrales or {"medio": config.UMBRAL_PROB_MEDIO, "alto": config.UMBRAL_PROB_ALTO}
     y = prueba[objetivo].to_numpy()
     prob = predecir(modelo, prueba)
     ifa = prueba["ifa"].to_numpy()
 
     # Alerta operativa: el índice base alerta en Medio o Alto; el modelo, con prob >= umbral medio.
     alerta_base = prueba["nivel_base"].isin(["Medio", "Alto"]).to_numpy()
-    alerta_modelo = prob >= config.UMBRAL_PROB_MEDIO
+    alerta_modelo = prob >= umbrales["medio"]
+    alerta_alto = prob >= umbrales["alto"]
 
     def resumen_alerta(alerta):
         return {
@@ -55,6 +79,10 @@ def evaluar(modelo, prueba, objetivo=OBJETIVO):
             "precision": float(precision_score(y, alerta, zero_division=0)),
             "cobertura": float(recall_score(y, alerta, zero_division=0)),
         }
+
+    # Comparación justa: el umbral del modelo que alcanza la misma cobertura que el índice base.
+    umbral_igual = umbral_para_cobertura(prob, y, recall_score(y, alerta_base, zero_division=0))
+    alerta_igual = prob >= umbral_igual
 
     return {
         "filas_prueba": int(len(y)),
@@ -64,7 +92,16 @@ def evaluar(modelo, prueba, objetivo=OBJETIVO):
             "roc_auc": float(roc_auc_score(y, prob)),
             "pr_auc": float(average_precision_score(y, prob)),
             "brier": float(brier_score_loss(y, prob)),
+            "umbral_medio": float(umbrales["medio"]),
             **resumen_alerta(alerta_modelo),
+        },
+        "modelo_nivel_alto": {
+            "umbral_alto": float(umbrales["alto"]),
+            **resumen_alerta(alerta_alto),
+        },
+        "modelo_misma_cobertura_que_base": {
+            "umbral_prob": umbral_igual,
+            **resumen_alerta(alerta_igual),
         },
         "indice_base": {
             "roc_auc": float(roc_auc_score(y, ifa)),
@@ -83,7 +120,7 @@ def importancia(modelo):
     )
 
 
-def guardar(modelo, metricas, entrenamiento, carpeta=config.CARPETA_SALIDAS):
+def guardar(modelo, metricas, entrenamiento, carpeta=config.CARPETA_SALIDAS, umbrales=None):
     carpeta = Path(carpeta)
     carpeta.mkdir(parents=True, exist_ok=True)
     meta = {
@@ -92,6 +129,7 @@ def guardar(modelo, metricas, entrenamiento, carpeta=config.CARPETA_SALIDAS):
         # Para pronósticos del NHC sin radio de 34 kt se usa la mediana histórica.
         "r34_mediana_km": float(np.nanmedian(entrenamiento["r34_max_km"])),
         "temporadas_entrenamiento": sorted(int(t) for t in entrenamiento["temporada"].unique()),
+        "umbrales": umbrales,
     }
     joblib.dump({"modelo": modelo, "meta": meta}, carpeta / "modelo.joblib")
     (carpeta / "metricas.json").write_text(json.dumps(metricas, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -102,6 +140,7 @@ def cargar(ruta=config.CARPETA_SALIDAS / "modelo.joblib"):
     return paquete["modelo"], paquete["meta"]
 
 
-def nivel(prob):
+def nivel(prob, umbrales=None):
+    umbrales = umbrales or {"medio": config.UMBRAL_PROB_MEDIO, "alto": config.UMBRAL_PROB_ALTO}
     prob = np.asarray(prob)
-    return np.where(prob >= config.UMBRAL_PROB_ALTO, "Alto", np.where(prob >= config.UMBRAL_PROB_MEDIO, "Medio", "Bajo"))
+    return np.where(prob >= umbrales["alto"], "Alto", np.where(prob >= umbrales["medio"], "Medio", "Bajo"))

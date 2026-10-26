@@ -29,7 +29,7 @@ def evaluar_tormenta(estado, pron, cartera, mdl, meta):
     v = variables.calcular(estado, pron, cartera)
     v = indice_base.calcular(v)
     v["prob"] = modelo.predecir(mdl, v)
-    v["nivel"] = modelo.nivel(v["prob"])
+    v["nivel"] = modelo.nivel(v["prob"], meta.get("umbrales"))
     info = cartera.rename(columns={"lat": "lat_ubicacion", "lon": "lon_ubicacion"})
     return info.merge(v, on="id")
 
@@ -63,10 +63,17 @@ def cmd_entrenar(args):
     datos = dataset.construir(df, cartera)
     entrenamiento, prueba = modelo.separar_por_temporada(datos, args.anio_prueba)
     print(f"Entrenamiento: {len(entrenamiento):,} filas · Prueba: {len(prueba):,} filas (temporadas >= {args.anio_prueba})")
+    # Los umbrales se eligen con las últimas temporadas de entrenamiento, nunca con las de prueba.
+    ajuste, validacion = modelo.separar_por_temporada(entrenamiento, args.anio_prueba - config.TEMPORADAS_VALIDACION)
+    umbrales = modelo.calibrar_umbrales(modelo.entrenar(ajuste), validacion,
+                                        cobertura_medio=args.cobertura_medio, cobertura_alto=args.cobertura_alto)
+    print(f"Umbrales calibrados con {umbrales['temporadas_validacion']}: "
+          f"Medio >= {umbrales['medio']:.4f} · Alto >= {umbrales['alto']:.4f}")
     mdl = modelo.entrenar(entrenamiento)
-    metricas = modelo.evaluar(mdl, prueba)
+    metricas = modelo.evaluar(mdl, prueba, umbrales=umbrales)
+    metricas["umbrales"] = umbrales
     metricas["importancia_variables"] = modelo.importancia(mdl)
-    modelo.guardar(mdl, metricas, entrenamiento, carpeta=args.salida)
+    modelo.guardar(mdl, metricas, entrenamiento, carpeta=args.salida, umbrales=umbrales)
     print(json.dumps(metricas, indent=2, ensure_ascii=False))
 
 
@@ -124,6 +131,8 @@ def main(argv=None):
 
     sp = con_cartera(sub.add_parser("entrenar", help="Entrena y evalúa el modelo contra el índice base"))
     sp.add_argument("--anio-prueba", type=int, default=2020)
+    sp.add_argument("--cobertura-medio", type=float, default=config.COBERTURA_OBJETIVO_MEDIO)
+    sp.add_argument("--cobertura-alto", type=float, default=config.COBERTURA_OBJETIVO_ALTO)
     sp.set_defaults(func=cmd_entrenar)
 
     sp = con_cartera(sub.add_parser("simular", help="Backtest de una emisión histórica"))
