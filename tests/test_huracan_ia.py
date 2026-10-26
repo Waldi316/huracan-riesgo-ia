@@ -120,3 +120,34 @@ def test_cartera_simulada_es_reproducible():
     a, b = ubicaciones.simuladas(50, semilla=1), ubicaciones.simuladas(50, semilla=1)
     pd.testing.assert_frame_equal(a, b)
     assert a["id"].is_unique
+
+
+AVISO_TCM = """
+ZCZC MIATCMEP3 ALL
+TROPICAL STORM OTIS FORECAST/ADVISORY NUMBER   5
+NWS NATIONAL HURRICANE CENTER MIAMI FL       EP182023
+1500 UTC MON OCT 23 2023
+TROPICAL STORM CENTER LOCATED NEAR 12.0N  97.5W AT 23/1500Z
+PRESENT MOVEMENT TOWARD THE NORTH-NORTHWEST OR 340 DEGREES AT   6 KT
+MAX SUSTAINED WINDS  40 KT WITH GUSTS TO  50 KT.
+34 KT....... 60NE  60SE   0SW  60NW.
+REPEAT...CENTER LOCATED NEAR 12.0N  97.5W AT 23/1500Z
+FORECAST VALID 24/0000Z 12.6N  97.7W
+MAX WIND  45 KT...GUSTS  55 KT.
+34 KT... 60NE  60SE   0SW  60NW.
+FORECAST VALID 26/1200Z 17.5N 100.5W...INLAND
+MAX WIND  35 KT...GUSTS  45 KT.
+OUTLOOK VALID 27/1200Z...DISSIPATED
+$$
+"""
+
+
+def test_leer_aviso_tcm():
+    from huracan_ia import nhc_archivo
+
+    a = nhc_archivo.leer_aviso(AVISO_TCM)
+    assert a["tiempo"] == pd.Timestamp("2023-10-23 15:00")
+    assert (a["lat"], a["lon"], a["vmax_kt"], a["rumbo"]) == (12.0, -97.5, 40.0, 340.0)
+    assert a["r34_max_km"] == pytest.approx(60 * 1.852)
+    assert a["pronostico"]["horas"].tolist() == [0.0, 9.0, 69.0]
+    assert a["pronostico"]["lon"].tolist() == [-97.5, -97.7, -100.5]

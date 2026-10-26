@@ -2,7 +2,7 @@
 
     python -m huracan_ia descargar
     python -m huracan_ia entrenar [--ubicaciones mis_ubicaciones.csv] [--anio-prueba 2020]
-    python -m huracan_ia simular --tormenta OTIS --temporada 2023 --emision "2023-10-24 00:00" [--boletin]
+    python -m huracan_ia simular --tormenta OTIS --temporada 2023 --emision "2023-10-24 03:00" [--boletin]
     python -m huracan_ia alertar --activas | --zip al182023_5day_001.zip [--boletin]
 """
 import argparse
@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from . import boletin, config, dataset, etiquetas, ibtracs, indice_base, mapa, modelo, pronostico, ubicaciones, variables
+from . import boletin, config, dataset, etiquetas, ibtracs, indice_base, mapa, modelo, nhc_archivo, pronostico, ubicaciones, variables
 
 
 def _cartera(args):
@@ -56,11 +56,8 @@ def cmd_descargar(args):
         print("OK", ruta)
 
 
-def cmd_entrenar(args):
-    df = ibtracs.cargar(ibtracs.descargar())
-    cartera = _cartera(args)
-    print(f"Construyendo conjunto de entrenamiento con {len(cartera)} ubicaciones...")
-    datos = dataset.construir(df, cartera)
+def _entrenar_y_evaluar(datos, args):
+    """Calibra umbrales con las últimas temporadas de entrenamiento, reentrena y evalúa en prueba."""
     entrenamiento, prueba = modelo.separar_por_temporada(datos, args.anio_prueba)
     print(f"Entrenamiento: {len(entrenamiento):,} filas · Prueba: {len(prueba):,} filas (temporadas >= {args.anio_prueba})")
     # Los umbrales se eligen con las últimas temporadas de entrenamiento, nunca con las de prueba.
@@ -73,8 +70,30 @@ def cmd_entrenar(args):
     metricas = modelo.evaluar(mdl, prueba, umbrales=umbrales)
     metricas["umbrales"] = umbrales
     metricas["importancia_variables"] = modelo.importancia(mdl)
-    modelo.guardar(mdl, metricas, entrenamiento, carpeta=args.salida, umbrales=umbrales)
+    return mdl, metricas, entrenamiento
+
+
+def cmd_entrenar(args):
+    df = ibtracs.cargar(ibtracs.descargar())
+    cartera = _cartera(args)
+    print(f"Construyendo conjunto de entrenamiento con {len(cartera)} ubicaciones...")
+    if args.pronostico == "oficial":
+        sids = ibtracs.tormentas_relevantes(df)
+        atcfs = sorted({a for v in ibtracs.atcf_de_tormentas(df, sids).values() for a in v})
+        print(f"Descargando avisos del NHC de {len(atcfs)} tormentas (con caché en datos/nhc_avisos)...")
+        avisos = nhc_archivo.descargar(atcfs)
+        datos, datos_persistencia = dataset.construir_con_nhc(df, cartera, avisos, sids=sids)
+    else:
+        datos = dataset.construir(df, cartera)
+    mdl, metricas, entrenamiento = _entrenar_y_evaluar(datos, args)
+    metricas["pronostico"] = args.pronostico
+    if args.pronostico == "oficial":
+        # Mismo modelo y mismas emisiones, pero con variables de persistencia: aísla el efecto del pronóstico.
+        _, m_pers, _ = _entrenar_y_evaluar(datos_persistencia, args)
+        metricas["persistencia_mismas_emisiones"] = {k: m_pers[k] for k in ("modelo", "modelo_nivel_alto", "indice_base", "umbrales")}
+    modelo.guardar(mdl, metricas, entrenamiento, carpeta=args.salida, umbrales=metricas["umbrales"])
     print(json.dumps(metricas, indent=2, ensure_ascii=False))
+
 
 
 def cmd_simular(args):
@@ -84,10 +103,18 @@ def cmd_simular(args):
     sid = ibtracs.buscar_tormenta(df, args.tormenta, args.temporada)
     tray = ibtracs.interpolar_horario(df[df["sid"] == sid])
     t0 = pd.Timestamp(args.emision)
-    resultado = pronostico.por_persistencia(tray, t0)
-    if resultado is None:
-        raise SystemExit(f"No hay datos de {args.tormenta} en {t0} (o 12 h antes)")
-    estado, pron = resultado
+    if args.pronostico == "oficial":
+        atcfs = ibtracs.atcf_de_tormentas(df, [sid]).get(sid, [])
+        emisiones = {t: (e, p) for t, e, p in nhc_archivo.emisiones(nhc_archivo.descargar(atcfs))}
+        if t0 not in emisiones:
+            horas = ", ".join(f"{t:%Y-%m-%d %H:%M}" for t in sorted(emisiones))
+            raise SystemExit(f"No hay aviso del NHC de {args.tormenta} a las {t0}. Avisos disponibles: {horas}")
+        estado, pron = emisiones[t0]
+    else:
+        resultado = pronostico.por_persistencia(tray, t0)
+        if resultado is None:
+            raise SystemExit(f"No hay datos de {args.tormenta} en {t0} (o 12 h antes)")
+        estado, pron = resultado
     cartera = _cartera(args)
     res = evaluar_tormenta(estado, pron, cartera, mdl, meta)
     res["viento_recibido_kt"] = etiquetas.viento_maximo_recibido(
@@ -133,12 +160,16 @@ def main(argv=None):
     sp.add_argument("--anio-prueba", type=int, default=2020)
     sp.add_argument("--cobertura-medio", type=float, default=config.COBERTURA_OBJETIVO_MEDIO)
     sp.add_argument("--cobertura-alto", type=float, default=config.COBERTURA_OBJETIVO_ALTO)
+    sp.add_argument("--pronostico", choices=["oficial", "persistencia"], default="oficial",
+                    help="oficial: avisos históricos del NHC; persistencia: extrapolar las últimas 12 h")
     sp.set_defaults(func=cmd_entrenar)
 
     sp = con_cartera(sub.add_parser("simular", help="Backtest de una emisión histórica"))
     sp.add_argument("--tormenta", required=True)
     sp.add_argument("--temporada", required=True, type=int)
-    sp.add_argument("--emision", required=True, help='Hora UTC, p. ej. "2023-10-24 00:00"')
+    sp.add_argument("--emision", required=True, help='Hora UTC, p. ej. "2023-10-24 03:00"')
+    sp.add_argument("--pronostico", choices=["oficial", "persistencia"], default="oficial",
+                    help="oficial: el aviso del NHC de esa hora (03, 09, 15 o 21 UTC); persistencia: extrapolar")
     sp.add_argument("--boletin", action="store_true")
     sp.set_defaults(func=cmd_simular)
 
