@@ -10,7 +10,7 @@ from . import config
 CUADRANTES = ("NE", "SE", "SW", "NW")
 UMBRALES_KT = (34, 50, 64)
 COLUMNAS_RADIOS = [f"USA_R{u}_{c}" for u in UMBRALES_KT for c in CUADRANTES]
-COLUMNAS = ["SID", "SEASON", "BASIN", "NAME", "ISO_TIME", "LAT", "LON", "USA_WIND"] + COLUMNAS_RADIOS
+COLUMNAS = ["SID", "SEASON", "BASIN", "NAME", "ISO_TIME", "LAT", "LON", "USA_WIND", "USA_ATCF_ID"] + COLUMNAS_RADIOS
 
 
 def descargar(cuencas=config.CUENCAS_IBTRACS, carpeta=config.CARPETA_DATOS):
@@ -55,6 +55,7 @@ def normalizar(df):
         "lat": df["LAT"].values,
         "lon": df["LON"].values,
         "vmax_kt": df["USA_WIND"].values,
+        "atcf": df["USA_ATCF_ID"].values if "USA_ATCF_ID" in df else None,
     })
     for u in UMBRALES_KT:
         for c in CUADRANTES:
@@ -68,7 +69,7 @@ def interpolar_horario(trayectoria):
     Los radios faltantes se dejan en 0: si la agencia no reportó radio de 34 kt,
     se asume que en ese cuadrante no había vientos de esa fuerza.
     """
-    t = trayectoria.drop_duplicates("tiempo").set_index("tiempo").sort_index()
+    t = trayectoria.drop(columns=["atcf"], errors="ignore").drop_duplicates("tiempo").set_index("tiempo").sort_index()
     numericas = t.select_dtypes(include=[np.number]).drop(columns=["temporada"], errors="ignore")
     horas = pd.date_range(t.index.min(), t.index.max(), freq="1h")
     interp = numericas.reindex(numericas.index.union(horas)).interpolate(method="time", limit_area="inside").loc[horas]
@@ -95,3 +96,10 @@ def buscar_tormenta(df, nombre, temporada):
     if sel.empty:
         raise ValueError(f"No encontré {nombre} {temporada} en IBTrACS")
     return sel["sid"].iloc[0]
+
+
+def atcf_de_tormentas(df, sids):
+    """Identificadores ATCF del NHC (p. ej. EP182023) de cada tormenta; algunas cruzan de cuenca y tienen dos."""
+    sel = df[df["sid"].isin(sids)].dropna(subset=["atcf"])
+    sel = sel[sel["atcf"].str[:2].isin(["AL", "EP"])]
+    return sel.groupby("sid")["atcf"].unique().map(list).to_dict()
