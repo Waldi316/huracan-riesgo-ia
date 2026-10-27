@@ -149,6 +149,8 @@ Agua detectada por Sentinel-1 el 28 sep 2024 a las 12:27 UTC (caída de VV ≥ 3
 
 La versión inicial ponía el agua en los arroyos de la sierra, que el 28 sep ya habían bajado, y no veía el agua estancada en la planicie de Llano Largo y el aeropuerto. Esa agua es la laguna, que sube con lo que le entra de La Sabana y no alcanza a desaguar por la barra. El ancho del vertedor de salida (100 m) se calibró con esta misma escena, así que el CSI de 0.40 es de calibración, no de prueba: falta validarlo en otros eventos. El radar casi no ve agua entre edificios, así que en el centro urbano el POD real es incierto.
 
+**Prueba con Trudy 2026 en Manzanillo (no concluyente).** Trudy pasó frente a Colima el 17–18 oct sin tocar tierra. La única pasada de Sentinel-1 que cubre Manzanillo es del 22 oct, cuatro días después. Con la lluvia de CMORPH-RT (63 mm de promedio en el dominio), el modelo inunda como máximo 3.9 km² y para el 22 oct ya no tiene agua, mientras que el radar marca 5.1 km² de cambio, casi la mitad en zona urbana, donde la banda C no distingue bien el agua. Con una escena tan tardía, una lluvia en tiempo real que suele quedarse corta y una máscara ruidosa en ciudad, Trudy no sirve para validar ni recalibrar. Hace falta un evento con una pasada del radar cerca del pico.
+
 ### Uso
 
 ```bash
