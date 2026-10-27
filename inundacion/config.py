@@ -34,6 +34,12 @@ DOMINIOS = {
     "manzanillo": {"lat_min": 18.95, "lat_max": 19.20, "lon_min": -104.45, "lon_max": -104.15,
                    "lagunas": {"Cuyutlán vaso I": (19.033, -104.261, 8), "Cuyutlán vaso II": (19.0015, -104.18, 5),
                                "Las Garzas": (19.0677, -104.2932, 5)}},
+    # Polo 2026 (Guaymas, Ciudad Constitución) y Rachel 2026 (Tijuana, Ensenada, Mexicali).
+    "guaymas": {"lat_min": 27.85, "lat_max": 28.05, "lon_min": -111.05, "lon_max": -110.70},
+    "constitucion": {"lat_min": 24.95, "lat_max": 25.12, "lon_min": -111.78, "lon_max": -111.55},
+    "tijuana": {"lat_min": 32.40, "lat_max": 32.56, "lon_min": -117.13, "lon_max": -116.85},
+    "ensenada": {"lat_min": 31.78, "lat_max": 31.92, "lon_min": -116.68, "lon_max": -116.54},
+    "mexicali": {"lat_min": 32.53, "lat_max": 32.68, "lon_min": -115.58, "lon_max": -115.35},
 }
 
 # --- Modelo de lluvia ---
