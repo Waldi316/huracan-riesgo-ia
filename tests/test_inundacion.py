@@ -133,3 +133,27 @@ def test_metricas_de_validacion():
     lejos[8, 8] = True
     assert validacion.metricas(lejos, obs, huella)["csi"] == 0
     assert validacion.metricas(lejos, obs, np.zeros_like(obs))["falsas_alarmas"] == 0   # fuera de la huella no cuenta
+
+
+# ------------------------------------------------------------------ alerta por lluvia
+
+def test_alerta_lluvia_niveles():
+    from alerta_lluvia import niveles
+
+    n = niveles.clasificar([60, 30, 22, 22, 5, 10], [np.nan, 40, 21, np.nan, 3, 3])
+    assert list(n) == ["Alerta", "Vigilancia", "Alerta", "Sin alerta", "Sin alerta", "Sin alerta"]
+
+
+def test_alerta_lluvia_tabla_del_dia():
+    from alerta_lluvia import niveles
+
+    fechas = pd.date_range("2026-06-01", periods=100, freq="D")
+    rng = np.random.default_rng(0)
+    diaria = pd.DataFrame({"seco": rng.uniform(0, 1, 100), "humedo": rng.uniform(0, 10, 100)}, index=fechas)
+    diaria.iloc[-3:, 1] = [30, 25, 10]   # 65 mm en 3 días
+    diaria.iloc[50, 0] = np.nan          # día faltante: no rompe el resto
+    t = niveles.tabla_del_dia(diaria)
+    assert t.loc["humedo", "lluvia_72h"] == pytest.approx(65)
+    assert t.loc["humedo", "nivel"] == "Alerta"
+    assert t.loc["seco", "nivel"] == "Sin alerta"
+    assert t["fecha_dato"].iloc[0] == fechas[-1].date()
