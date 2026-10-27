@@ -50,7 +50,7 @@ NIVELES_TIRANTE_M = (0.0, 20.0, 0.1)   # tabla de curva de gasto: de 0 a 20 m ca
 TIRANTE_MINIMO_VISIBLE_M = 0.15
 # Laguna costera como vaso: sube con lo que le entra y desagua al mar por un vertedor en la barra.
 # El ancho de salida es el parámetro de calibración (validado con Sentinel-1 / CENAPRED, John 2024).
-LAGUNA_ANCHO_SALIDA_M = 150.0
+LAGUNA_ANCHO_SALIDA_M = 100.0   # CSI 0.35 contra Sentinel-1 del 28 sep 2024 (John)
 LAGUNA_COEF_VERTEDOR = 1.7     # vertedor de cresta ancha, m^0.5/s
 LAGUNA_SOBREELEVACION_MAX_M = 8.0
 # Número de curva (condición de humedad II) por clase de WorldCover.

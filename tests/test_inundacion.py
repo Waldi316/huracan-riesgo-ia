@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from inundacion import escenarios, exposicion, hidrologia, modelo_lluvia, terreno
+from inundacion import escenarios, exposicion, hidrologia, modelo_lluvia, terreno, validacion
 
 
 @pytest.fixture(scope="module")
@@ -119,3 +119,17 @@ def test_fecha_de_emision_nhc():
     assert escenarios.emision_nhc("1200 PM CST Mon Sep 23 2024") == pd.Timestamp("2024-09-23 18:00")
     assert escenarios.emision_nhc("900 PM CST Mon Sep 23 2024") == pd.Timestamp("2024-09-24 03:00")
     assert escenarios.emision_nhc("300 AM CST Mon Sep 23 2024") == pd.Timestamp("2024-09-23 09:00")
+
+
+def test_metricas_de_validacion():
+    obs = np.zeros((10, 10), dtype=bool)
+    obs[2:5, 2:5] = True
+    huella = np.ones_like(obs)
+    perfecta = validacion.metricas(obs, obs, huella)
+    assert perfecta["csi"] == 1 and perfecta["far"] == 0
+    corrida = np.roll(obs, 1, axis=1)                 # una celda de error de posición: la tolerancia lo absorbe
+    assert validacion.metricas(corrida, obs, huella)["pod"] == 1
+    lejos = np.zeros_like(obs)
+    lejos[8, 8] = True
+    assert validacion.metricas(lejos, obs, huella)["csi"] == 0
+    assert validacion.metricas(lejos, obs, np.zeros_like(obs))["falsas_alarmas"] == 0   # fuera de la huella no cuenta
