@@ -177,6 +177,22 @@ Los avisos se descargan de `https://www.nhc.noaa.gov/gis/forecast/archive/` (`ep
 - **Sin validación contra manchas observadas.** No hubo acceso a polígonos de inundación (CENAPRED, Sentinel-1). Con ellos se puede calibrar el número de curva y la rugosidad, y entrenar un clasificador de celdas inundadas.
 - **Lluvia extrema.** El modelo esperado subestima eventos como John. Para alertar conviene usar el escenario P90.
 
+## Alerta diaria por lluvia (`alerta_lluvia/`)
+
+No hace falta un huracán para que una tienda se inunde o se filtre. Este módulo marca cada punto
+con la lluvia acumulada de 3 días de CMORPH ICDR (NOAA/CPC, 0.25°, latencia de 1 día, sin cuenta):
+
+| Nivel | Regla |
+|---|---|
+| Alerta | lluvia de 3 días >= 50 mm, o >= el percentil 90 propio del punto con al menos 20 mm |
+| Vigilancia | lluvia de 3 días >= 25 mm |
+| Sin alerta | el resto |
+
+Los umbrales salen de cruzar la lluvia contra órdenes de mantenimiento por agua (jun-oct 2026): la
+tasa de orden se duplica por encima de 50 mm o del P90 propio. La separación es débil (AUC 0.58)
+porque las órdenes no traen fecha ni causa reales, así que son provisionales. La publicación
+diaria a un tablero se hace fuera de este repo, en el portal de la empresa.
+
 ## Estructura
 
 ```

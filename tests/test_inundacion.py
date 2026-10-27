@@ -157,3 +157,12 @@ def test_alerta_lluvia_tabla_del_dia():
     assert t.loc["humedo", "nivel"] == "Alerta"
     assert t.loc["seco", "nivel"] == "Sin alerta"
     assert t["fecha_dato"].iloc[0] == fechas[-1].date()
+
+
+def test_alerta_lluvia_celda_de_cada_punto():
+    from alerta_lluvia import fuentes
+
+    lat, lon = np.array([16.875, 17.125]), np.array([260.125, 260.375])   # lon 0..360 como en CMORPH
+    campo = np.array([[1.0, 2.0], [3.0, 4.0]])
+    v = fuentes._en_puntos(campo, lat, lon, [17.1, 16.9], [-99.6, -99.9])
+    assert list(v) == [4.0, 1.0]
