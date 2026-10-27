@@ -139,15 +139,15 @@ Con la lluvia observada, las zonas inundadas son el río La Sabana y la planicie
 
 ### Validación con radar Sentinel-1
 
-Agua detectada por Sentinel-1 el 28 sep 2024 a las 12:27 UTC (caída de VV ≥ 3 dB contra el 9 sep, coincide con el mapa de CENAPRED para la Carta Internacional, activación 918): 11.7 km² de agua nueva en la mitad oriental del dominio. Comparación celda a celda con 30 m de tolerancia (`inundacion/validacion.py`):
+Agua detectada por Sentinel-1 el 28 sep 2024 a las 12:27 UTC (caída de VV ≥ 3 dB contra el 9 sep, coincide con el mapa de CENAPRED para la Carta Internacional, activación 918): 8.4 km² de agua nueva en tierra firme, dentro de una huella observada de 367 km² en la mitad oriental del dominio. Comparación celda a celda con 30 m de tolerancia (`inundacion/validacion.py`):
 
 | Versión del modelo | Detecta (POD) | Falsas alarmas (FAR) | CSI |
 |---|---|---|---|
-| HAND + curva de gasto (versión inicial) | 0.19 | 0.71 | 0.13 |
-| + cauce lleno (Bieger et al. 2015) | 0.13 | 0.65 | 0.11 |
-| **+ laguna de Tres Palos como vaso** | **0.61** | **0.51** | **0.35** |
+| HAND + curva de gasto (versión inicial) | 0.25 | 0.70 | 0.16 |
+| + cauce lleno (Bieger et al. 2015) | 0.18 | 0.64 | 0.14 |
+| **+ laguna de Tres Palos como vaso** | **0.79** | **0.52** | **0.40** |
 
-La versión inicial ponía el agua en los arroyos de la sierra, que el 28 sep ya habían bajado, y no veía el agua estancada en la planicie de Llano Largo y el aeropuerto. Esa agua es la laguna, que sube con lo que le entra de La Sabana y no alcanza a desaguar por la barra. El ancho del vertedor de salida (100 m) se calibró con esta misma escena, así que el CSI de 0.35 es de calibración, no de prueba: falta validarlo en otros eventos. El radar casi no ve agua entre edificios, así que en el centro urbano el POD real es incierto.
+La versión inicial ponía el agua en los arroyos de la sierra, que el 28 sep ya habían bajado, y no veía el agua estancada en la planicie de Llano Largo y el aeropuerto. Esa agua es la laguna, que sube con lo que le entra de La Sabana y no alcanza a desaguar por la barra. El ancho del vertedor de salida (100 m) se calibró con esta misma escena, así que el CSI de 0.40 es de calibración, no de prueba: falta validarlo en otros eventos. El radar casi no ve agua entre edificios, así que en el centro urbano el POD real es incierto.
 
 ### Uso
 
