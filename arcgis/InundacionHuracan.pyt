@@ -44,9 +44,12 @@ class CargarEscenario(object):
         if mapa is None:
             raise arcpy.ExecuteError("Abre una vista de mapa antes de correr la herramienta.")
 
-        # Pro abre el NetCDF CF como ráster multidimensional y toma la dimensión time.
-        capa_tiempo = mapa.addDataFromPath(os.path.join(carpeta, escenario + "_tirante_horario.nc"))
-        capa_tiempo.name = escenario + " · tirante horario (m)"
+        # addDataFromPath no abre el NetCDF ("Failed to add data"); como ráster multidimensional sí,
+        # y toma la dimensión time para el Time Slider.
+        nombre = escenario + " · tirante horario (m)"
+        resultado = arcpy.md.MakeMultidimensionalRasterLayer(
+            os.path.join(carpeta, escenario + "_tirante_horario.nc"), nombre, variables=["tirante"])
+        capa_tiempo = mapa.addLayer(resultado.getOutput(0))[0]
         _rampa_azules(capa_tiempo)
 
         capa_max = mapa.addDataFromPath(os.path.join(carpeta, escenario + "_tirante_max.tif"))

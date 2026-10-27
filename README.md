@@ -130,12 +130,26 @@ John 2024 en Acapulco (`python -m inundacion simular ...`, 250 inmuebles **simul
 
 | Escenario | Lluvia total | Área inundada máx. | Inmuebles con ≥0.15 m |
 |---|---|---|---|
-| Lluvia observada (CMORPH) | 686 mm | 43.8 km² | 15 |
-| Aviso NHC 23 sep 12:00 (esperado / severo) | 54 / 177 mm | 7.6 / 17.3 km² | 0 / 5 |
-| Aviso NHC 25 sep 09:00 (esperado / severo) | 170 / 365 mm | 18.1 / 26.8 km² | 5 / 7 |
-| Trayectoria real + modelo | 207 mm | 28.0 km² | 7 |
+| Lluvia observada (CMORPH) | 686 mm | 43.5 km² | 15 |
+| Aviso NHC 23 sep 12:00 (esperado / severo) | 54 / 177 mm | 4.3 / 13.7 km² | 0 / 0 |
+| Aviso NHC 25 sep 09:00 (esperado / severo) | 170 / 365 mm | 13.9 / 24.6 km² | 0 / 6 |
+| Trayectoria real + modelo | 207 mm | 22.3 km² | 7 |
 
 Con la lluvia observada, las zonas inundadas son el río La Sabana y la planicie de Llano Largo y Diamante, con el pico el 26 de septiembre, lo que coincide con lo reportado. Con los avisos que había en su momento, ningún escenario anticipa la magnitud: el NHC pronosticaba la trayectoria de John lejos de Acapulco y no previó su regeneración frente a Guerrero, y la lluvia en el puerto cayó con el centro a 200-300 km. Para este evento, el error de trayectoria pesó más que el modelo de lluvia.
+
+### Validación con radar Sentinel-1
+
+Agua detectada por Sentinel-1 el 28 sep 2024 a las 12:27 UTC (caída de VV ≥ 3 dB contra el 9 sep, coincide con el mapa de CENAPRED para la Carta Internacional, activación 918): 8.4 km² de agua nueva en tierra firme, dentro de una huella observada de 367 km² en la mitad oriental del dominio. Comparación celda a celda con 30 m de tolerancia (`inundacion/validacion.py`):
+
+| Versión del modelo | Detecta (POD) | Falsas alarmas (FAR) | CSI |
+|---|---|---|---|
+| HAND + curva de gasto (versión inicial) | 0.25 | 0.70 | 0.16 |
+| + cauce lleno (Bieger et al. 2015) | 0.18 | 0.64 | 0.14 |
+| **+ laguna de Tres Palos como vaso** | **0.79** | **0.52** | **0.40** |
+
+La versión inicial ponía el agua en los arroyos de la sierra, que el 28 sep ya habían bajado, y no veía el agua estancada en la planicie de Llano Largo y el aeropuerto. Esa agua es la laguna, que sube con lo que le entra de La Sabana y no alcanza a desaguar por la barra. El ancho del vertedor de salida (100 m) se calibró con esta misma escena, así que el CSI de 0.40 es de calibración, no de prueba: falta validarlo en otros eventos. El radar casi no ve agua entre edificios, así que en el centro urbano el POD real es incierto.
+
+**Prueba con Trudy 2026 en Manzanillo (no concluyente).** Trudy pasó frente a Colima el 17–18 oct sin tocar tierra. La única pasada de Sentinel-1 que cubre Manzanillo es del 22 oct, cuatro días después. Con la lluvia de CMORPH-RT (63 mm de promedio en el dominio), el modelo inunda como máximo 3.9 km² y para el 22 oct ya no tiene agua, mientras que el radar marca 5.1 km² de cambio, casi la mitad en zona urbana, donde la banda C no distingue bien el agua. Con una escena tan tardía, una lluvia en tiempo real que suele quedarse corta y una máscara ruidosa en ciudad, Trudy no sirve para validar ni recalibrar. Hace falta un evento con una pasada del radar cerca del pico.
 
 ### Uso
 
@@ -157,7 +171,7 @@ Los avisos se descargan de `https://www.nhc.noaa.gov/gis/forecast/archive/` (`ep
 
 ### Limitaciones
 
-- **Modelo de primer orden.** HAND + curva de gasto no simula flujo 2D, remanso ni drenaje urbano. Tampoco incluye la marea de tormenta, que en Acapulco se suma en la costa.
+- **Modelo de primer orden.** HAND + curva de gasto no simula flujo 2D ni drenaje urbano; el remanso solo se representa en las lagunas declaradas en `config.DOMINIOS`. Tampoco incluye la marea de tormenta, que en Acapulco se suma en la costa.
 - **DEM de superficie.** Copernicus incluye edificios y árboles; en zona urbana un DEM de terreno desnudo (LiDAR de INEGI, FABDEM) daría mejores tirantes.
 - **Lluvia uniforme** sobre el dominio, tomada en su centro (las celdas de CMORPH son de ~27 km).
 - **Sin validación contra manchas observadas.** No hubo acceso a polígonos de inundación (CENAPRED, Sentinel-1). Con ellos se puede calibrar el número de curva y la rugosidad, y entrenar un clasificador de celdas inundadas.

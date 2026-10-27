@@ -70,7 +70,8 @@ def geopackage_inmuebles(res, ruta):
 
 def horas_con_agua(sim, margen=6):
     """Rango de horas desde que empieza la lluvia hasta que el agua baja (para no exportar horas vacías)."""
-    activo = np.flatnonzero((sim["lluvia_mm_h"] > 0.1) | (sim["tirante_tramo_m"].max(axis=0) > 0.3))
+    nivel_lagunas = np.max([lag["nivel_m"] for lag in sim.get("lagunas", [])] or [np.zeros(len(sim["horas"]))], axis=0)
+    activo = np.flatnonzero((sim["lluvia_mm_h"] > 0.1) | (sim["tirante_tramo_m"].max(axis=0) > 0.3) | (nivel_lagunas > 0.3))
     if activo.size == 0:
         return range(len(sim["horas"]))
     return range(max(activo[0] - margen, 0), min(activo[-1] + margen + 1, len(sim["horas"])))
