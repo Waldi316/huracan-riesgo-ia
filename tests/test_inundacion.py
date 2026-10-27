@@ -66,6 +66,31 @@ def test_mas_lluvia_inunda_mas(valle):
     assert sim_mucha["caudal_m3s"].max(axis=0).argmax() > 0
 
 
+def test_cauce_lleno_conduce_lluvia_ligera(valle):
+    ancho, tirante, seccion = hidrologia.cauce_lleno([1, 100])
+    assert (np.diff(ancho) > 0).all() and (np.diff(tirante) > 0).all() and (np.diff(seccion) > 0).all()
+    horas = pd.date_range("2024-09-24", periods=12, freq="1h")
+    sim = hidrologia.simular(valle, pd.Series(np.where(np.arange(12) < 3, 2.0, 0.0), index=horas))
+    assert not np.isfinite(hidrologia.tirante_maximo(valle, sim)[0]).any()   # no se desborda
+
+
+def test_laguna_sube_y_desagua(valle):
+    ter = dict(valle)
+    agua = np.zeros(ter["dem"].shape, dtype=bool)
+    agua[175:188, 35:65] = True       # laguna al pie del valle, junto al mar
+    ter["agua_permanente"] = agua
+    lat, lon = exposicion.a_lat_lon(ter, [181], [50])
+    horas = pd.date_range("2024-09-24", periods=96, freq="1h")
+    lluvia = pd.Series(np.where(np.arange(96) < 12, 40.0, 0.0), index=horas)
+    sim = hidrologia.simular(ter, lluvia, lagunas={"Prueba": (lat[0], lon[0])})
+    nivel = sim["lagunas"][0]["nivel_m"]
+    assert nivel.max() > 0.2 and nivel[-1] < nivel.max() / 2      # sube con la tormenta y luego baja
+    assert sim["lagunas"][0]["entrada_m3s"].max() > 0              # el río del valle le entra
+    orilla = sim["lagunas"][0]["orilla"]
+    pico = int(nivel.argmax())
+    assert np.isfinite(hidrologia.tirante_en_celdas(ter, sim, pico).ravel()[orilla]).any()
+
+
 def test_exposicion_de_inmuebles(valle):
     horas = pd.date_range("2024-09-24", periods=24, freq="1h")
     sim = hidrologia.simular(valle, pd.Series(60.0, index=horas))

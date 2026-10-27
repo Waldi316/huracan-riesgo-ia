@@ -27,7 +27,9 @@ NIVEL_TESELA_ELEVACION = 5
 # --- Zona piloto ---
 DOMINIOS = {
     # Acapulco: bahía, río La Sabana y llanuras de Llano Largo / Diamante.
-    "acapulco": {"lat_min": 16.74, "lat_max": 17.06, "lon_min": -99.99, "lon_max": -99.70},
+    # Las lagunas (un punto dentro de cada una) se simulan como vasos que se llenan y desaguan.
+    "acapulco": {"lat_min": 16.74, "lat_max": 17.06, "lon_min": -99.99, "lon_max": -99.70,
+                 "lagunas": {"Tres Palos": (16.80, -99.75)}},
 }
 
 # --- Modelo de lluvia ---
@@ -42,9 +44,15 @@ ANIO_PRUEBA_LLUVIA = 2021      # se entrena con temporadas anteriores y se eval�
 # --- Hidrología ---
 UMBRAL_CAUCE_KM2 = 0.5         # área drenada a partir de la cual una celda es cauce
 N_MANNING = 0.06               # rugosidad de planicie (urbano / vegetación)
+N_MANNING_CAUCE = 0.035        # rugosidad del cauce principal
 PENDIENTE_MINIMA = 0.001
 NIVELES_TIRANTE_M = (0.0, 20.0, 0.1)   # tabla de curva de gasto: de 0 a 20 m cada 10 cm
 TIRANTE_MINIMO_VISIBLE_M = 0.15
+# Laguna costera como vaso: sube con lo que le entra y desagua al mar por un vertedor en la barra.
+# El ancho de salida es el parámetro de calibración (validado con Sentinel-1 / CENAPRED, John 2024).
+LAGUNA_ANCHO_SALIDA_M = 150.0
+LAGUNA_COEF_VERTEDOR = 1.7     # vertedor de cresta ancha, m^0.5/s
+LAGUNA_SOBREELEVACION_MAX_M = 8.0
 # Número de curva (condición de humedad II) por clase de WorldCover.
 NUMERO_CURVA = {
     10: 70,   # árboles

@@ -84,7 +84,7 @@ def cmd_simular(args):
     carpeta.mkdir(parents=True, exist_ok=True)
     resumen, lista = {}, []
     for i, (nombre, serie) in enumerate(series.items()):
-        sim = hidrologia.simular(ter, serie)
+        sim = hidrologia.simular(ter, serie, lagunas=dominio.get("lagunas"))
         res, tirante = exposicion.exposicion(ter, sim, cartera)
         area = exposicion.area_inundada_km2(ter, sim)
         resumen[nombre] = {"lluvia_total_mm": round(escenarios.lluvia_total_mm(serie), 1),

@@ -149,6 +149,7 @@ def procesar(ruta_dem, ruta_cobertura=None, umbral_cauce_km2=config.UMBRAL_CAUCE
     if ruta_cobertura is not None:
         with rasterio.open(ruta_cobertura) as src:
             cobertura = src.read(1)
+        agua_permanente = cobertura == 80        # antes de recortar el mar: incluye lagunas costeras
         cobertura = np.where(mar, 0, cobertura)
         clases = np.array(sorted(set(np.unique(cobertura[~mar]).tolist()) - {0}) or [0])
         area_clase = np.stack([
@@ -176,6 +177,7 @@ def procesar(ruta_dem, ruta_cobertura=None, umbral_cauce_km2=config.UMBRAL_CAUCE
     }
     if ruta_cobertura is not None:
         resultado["cobertura"] = cobertura
+        resultado["agua_permanente"] = agua_permanente
     if ruta_salida is not None:
         np.savez_compressed(ruta_salida, **resultado)
     return resultado

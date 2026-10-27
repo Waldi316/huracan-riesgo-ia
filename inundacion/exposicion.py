@@ -48,10 +48,8 @@ def exposicion(ter, sim, cartera):
     """Tirante por hora en cada inmueble, máximo, hora en que se inunda y nivel."""
     filas, cols = a_fila_columna(ter, cartera["lat"].to_numpy(), cartera["lon"].to_numpy())
     plano = filas * ter["dem"].shape[1] + cols
-    tramo = sim["tramo_celda"][plano]
     hand = ter["hand"].ravel()[plano]
-    h = np.where(tramo[:, None] >= 0, sim["tirante_tramo_m"][np.clip(tramo, 0, None)], 0.0)
-    tirante = np.nan_to_num(np.clip(h - hand[:, None], 0, None))        # (inmuebles, horas); sin HAND = seco
+    tirante = hidrologia.tirante_puntos(ter, sim, plano)               # (inmuebles, horas); sin HAND = seco
     tirante[tirante < config.TIRANTE_MINIMO_VISIBLE_M] = 0.0
     res = cartera.copy()
     res["elevacion_m"] = ter["dem"].ravel()[plano]
