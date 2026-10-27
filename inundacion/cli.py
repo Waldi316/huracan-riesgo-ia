@@ -61,12 +61,22 @@ def cmd_simular(args):
     horas = escenarios.ventana(args.inicio, args.fin)
 
     df = ibtracs.cargar(ibtracs.descargar())
-    sid = ibtracs.buscar_tormenta(df, args.tormenta, args.temporada)
-    real = df[df["sid"] == sid].dropna(subset=["vmax_kt"])
+    try:
+        sid = ibtracs.buscar_tormenta(df, args.tormenta, args.temporada)
+        real = df[df["sid"] == sid].dropna(subset=["vmax_kt"])
+        trayectorias = [{"nombre": f"{args.tormenta.title()} (trayectoria real)", "lat": real["lat"].tolist(),
+                         "lon": real["lon"].tolist()}]
+    except ValueError:
+        # Tormentas muy recientes tardan en llegar a IBTrACS.
+        print(f"{args.tormenta} {args.temporada} todavía no está en IBTrACS: se omite la trayectoria real.")
+        real, trayectorias = None, []
 
-    series = {"Lluvia observada (CMORPH)": escenarios.observada(dominio, horas)}
-    trayectorias = [{"nombre": f"{args.tormenta.title()} (trayectoria real)", "lat": real["lat"].tolist(),
-                     "lon": real["lon"].tolist()}]
+    if args.lluvia_csv:
+        # Serie horaria (mm/h, UTC) de otra fuente, p. ej. IMERG cuando CMORPH aún no publica el mes.
+        tabla = pd.read_csv(args.lluvia_csv, index_col=0, parse_dates=True)
+        series = {f"Lluvia observada ({args.fuente_lluvia})": tabla.iloc[:, 0].reindex(horas).fillna(0.0)}
+    else:
+        series = {"Lluvia observada (CMORPH)": escenarios.observada(dominio, horas)}
     for ruta in args.nhc or []:
         emision, tray = escenarios.pronostico_nhc(ruta)
         etiqueta = f"Pronóstico NHC {emision.tz_localize('UTC').tz_convert(animacion.ZONA_HORARIA):%d %b %H:%M}"
@@ -75,7 +85,7 @@ def cmd_simular(args):
         series[etiqueta + " · R-CLIPER"] = escenarios.con_trayectoria(mdl, tray, dominio, horas, emision=emision,
                                                                       metodo="rcliper")
         trayectorias.append({"nombre": etiqueta, "lat": tray["lat"].tolist(), "lon": tray["lon"].tolist()})
-    if args.emision_real:
+    if args.emision_real and real is not None:
         series["Trayectoria real + modelo"] = escenarios.con_trayectoria(mdl, real, dominio, horas,
                                                                          emision=pd.Timestamp(args.emision_real))
 
@@ -134,6 +144,8 @@ def main(argv=None):
     sp.add_argument("--fin", required=True, help="UTC")
     sp.add_argument("--nhc", action="append", help="Zip '5day' de un aviso del NHC (se puede repetir)")
     sp.add_argument("--emision-real", help="Agrega el escenario con la trayectoria real emitido a esta hora (UTC)")
+    sp.add_argument("--lluvia-csv", help="CSV con la lluvia horaria observada (índice UTC, mm/h) en lugar de CMORPH")
+    sp.add_argument("--fuente-lluvia", default="IMERG", help="Nombre de la fuente del CSV, para las etiquetas")
     sp.add_argument("--n-inmuebles", type=int, default=250)
     sp.add_argument("--paso-animacion", type=int, default=2, help="Horas entre cuadros de la animación")
     sp.set_defaults(func=cmd_simular)

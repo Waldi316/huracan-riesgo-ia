@@ -30,6 +30,10 @@ DOMINIOS = {
     # Las lagunas (un punto dentro de cada una) se simulan como vasos que se llenan y desaguan.
     "acapulco": {"lat_min": 16.74, "lat_max": 17.06, "lon_min": -99.99, "lon_max": -99.70,
                  "lagunas": {"Tres Palos": (16.80, -99.75)}},
+    # Manzanillo: puerto, laguna de Las Garzas / San Pedrito y el vaso I de Cuyutlán (Trudy 2026).
+    "manzanillo": {"lat_min": 18.95, "lat_max": 19.20, "lon_min": -104.45, "lon_max": -104.15,
+                   "lagunas": {"Cuyutlán vaso I": (19.033, -104.261, 8), "Cuyutlán vaso II": (19.0015, -104.18, 5),
+                               "Las Garzas": (19.0677, -104.2932, 5)}},
 }
 
 # --- Modelo de lluvia ---

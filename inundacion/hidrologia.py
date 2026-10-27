@@ -138,7 +138,8 @@ def curvas_de_gasto(ter, tramo_de_cauce, niveles=None, n=config.N_MANNING):
 def simular(ter, lluvia_mm_h, lagunas=None):
     """Simula la inundación con una serie horaria de lluvia uniforme sobre el dominio.
 
-    `lagunas`: {nombre: (lat, lon)} de un punto dentro de cada laguna costera (ver config.DOMINIOS).
+    `lagunas`: {nombre: (lat, lon) o (lat, lon, celdas de corte)} de un punto dentro de cada laguna costera;
+    las celdas de corte separan una laguna comunicada con el mar por canales (ver config.DOMINIOS).
     Devuelve un dict con: horas, caudal por tramo, tirante por tramo (m), nivel de cada laguna
     y lo necesario para reconstruir el tirante en cada celda con `tirante_en_celdas`.
     """
@@ -190,11 +191,19 @@ def vaso_laguna(ter, punto, tramo_de_cauce):
 
     if "agua_permanente" not in ter:
         raise ValueError("Las lagunas necesitan el agua de WorldCover en el terreno: vuelve a correr `terreno`.")
-    fila, col = (int(v[0]) for v in a_fila_columna(ter, *punto))
-    etiquetas, _ = ndimage.label(ter["agua_permanente"])
+    lat, lon, corte = (*punto, 0)[:3]
+    fila, col = (int(v[0]) for v in a_fila_columna(ter, lat, lon))
+    agua = ter["agua_permanente"]
+    if corte:
+        # La laguna se comunica con el mar por canales: una apertura morfológica los corta y luego se
+        # recuperan las orillas del vaso creciendo dentro del agua lo mismo que se recortó.
+        agua = ndimage.binary_opening(agua, structure=np.ones((3, 3)), iterations=corte)
+    etiquetas, _ = ndimage.label(agua)
     if etiquetas[fila, col] == 0:
         raise ValueError(f"El punto {punto} no cae en agua de WorldCover.")
     vaso = etiquetas == etiquetas[fila, col]
+    if corte:
+        vaso = ndimage.binary_dilation(vaso, structure=np.ones((3, 3)), iterations=corte, mask=ter["agua_permanente"])
     dem = ter["dem"]
     z0 = float(np.nanmedian(dem[vaso])) if np.isfinite(dem[vaso]).any() else 0.0
 
